@@ -62,6 +62,19 @@ type CommonNode struct {
 	Obfs                    string `json:"obfs"`
 	ObfsPassword            string `json:"obfs_password"`
 	Ignore_Client_Bandwidth bool   `json:"ignore_client_bandwidth"`
+	//mieru
+	Transport           string             `json:"transport"`
+	TrafficPattern      string             `json:"traffic_pattern"`
+	UserHintIsMandatory bool               `json:"user_hint_is_mandatory"`
+	PortBindings        []MieruPortBinding `json:"port_bindings"`
+}
+
+// MieruPortBinding is one mieru listening port (or port range) with its
+// transport protocol (TCP / UDP).
+type MieruPortBinding struct {
+	Port      int    `json:"port"`
+	PortRange string `json:"portRange"`
+	Protocol  string `json:"protocol"`
 }
 
 type Route struct {
@@ -166,7 +179,7 @@ func (c *Client) GetNodeInfo(ctx context.Context) (node *NodeInfo, err error) {
 	case "vmess", "trojan", "hysteria2", "tuic", "anytls", "vless":
 		node.Type = cm.Protocol
 		node.Security = cm.Tls
-	case "shadowsocks":
+	case "shadowsocks", "mieru":
 		node.Type = cm.Protocol
 		node.Security = 0
 	default:

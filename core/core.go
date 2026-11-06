@@ -34,6 +34,7 @@ type V2Core struct {
 	ihm        inbound.Manager
 	ohm        outbound.Manager
 	dispatcher *dispatcher.DefaultDispatcher
+	mieru      sync.Map // map[tag]*mieruInbound
 }
 
 type UserMap struct {
@@ -67,6 +68,11 @@ func (v *V2Core) Start(infos []*panel.NodeInfo) error {
 func (v *V2Core) Close() error {
 	v.access.Lock()
 	defer v.access.Unlock()
+	v.mieru.Range(func(key, value any) bool {
+		_ = value.(*mieruInbound).Close()
+		v.mieru.Delete(key)
+		return true
+	})
 	v.Config = nil
 	v.ihm = nil
 	v.ohm = nil

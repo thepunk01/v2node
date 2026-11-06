@@ -43,20 +43,28 @@ func (v *V2Core) GetUserManager(tag string) (proxy.UserManager, error) {
 }
 
 func (vc *V2Core) DelUsers(users []panel.UserInfo, tag string, _ *panel.NodeInfo) error {
-	userManager, err := vc.GetUserManager(tag)
-	if err != nil {
-		return fmt.Errorf("get user manager error: %s", err)
+	var userManager proxy.UserManager
+	if m, ok := vc.mieru.Load(tag); ok {
+		m.(*mieruInbound).DelUsers(users)
+	} else {
+		var err error
+		userManager, err = vc.GetUserManager(tag)
+		if err != nil {
+			return fmt.Errorf("get user manager error: %s", err)
+		}
 	}
 	var user string
 	vc.users.mapLock.Lock()
 	defer vc.users.mapLock.Unlock()
 	for i := range users {
 		user = format.UserTag(tag, users[i].Uuid)
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		err = userManager.RemoveUser(ctx, user)
-		cancel()
-		if err != nil {
-			return err
+		if userManager != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			err := userManager.RemoveUser(ctx, user)
+			cancel()
+			if err != nil {
+				return err
+			}
 		}
 		delete(vc.users.uidMap, user)
 		if v, ok := vc.dispatcher.Counter.Load(tag); ok {
@@ -111,6 +119,13 @@ func (v *V2Core) AddUsers(p *AddUsersParams) (added int, err error) {
 	defer v.users.mapLock.Unlock()
 	for i := range p.Users {
 		v.users.uidMap[format.UserTag(p.Tag, p.Users[i].Uuid)] = p.Users[i].Id
+	}
+	if p.NodeInfo.Type == "mieru" {
+		m, ok := v.mieru.Load(p.Tag)
+		if !ok {
+			return 0, fmt.Errorf("no such mieru inbound: %s", p.Tag)
+		}
+		return m.(*mieruInbound).AddUsers(p.Users)
 	}
 	var users []*protocol.User
 	switch p.NodeInfo.Type {

@@ -1,0 +1,120 @@
+name: Build v2node (with mieru)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/mieru.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mieru-build
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.3'
+      - name: Tidy modules
+        run: |
+          GOEXPERIMENT=jsonv2 go mod tidy
+          git diff --stat go.mod go.sum || true
+      - name: Commit go.mod / go.sum if changed
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          if ! git diff --quiet go.mod go.sum; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add go.mod go.sum
+            git commit -m "chore: go mod tidy (mieru deps)"
+            git push
+          fi
+      - name: Vet
+        run: GOEXPERIMENT=jsonv2 go vet ./core/ ./api/... ./limiter/ ./node/
+      - name: Test mieru inbound
+        run: GOEXPERIMENT=jsonv2 go test -count=1 -race -timeout 5m -run 'Mieru' -v ./core/
+      - name: Build check
+        run: GOEXPERIMENT=jsonv2 go build ./...
+      - name: Upload go.sum
+        uses: actions/upload-artifact@v6
+        with:
+          name: gomod
+          path: |
+            go.mod
+            go.sum
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            asset: linux-64
+          - goarch: arm64
+            asset: linux-arm64-v8a
+    env:
+      GOOS: linux
+      GOARCH: ${{ matrix.goarch }}
+      CGO_ENABLED: 0
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
+        with:
+          name: gomod
+          path: .
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.3'
+      - name: Build
+        run: |
+          version="mieru-$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
+          echo "version=$version" >> $GITHUB_ENV
+          mkdir -p build_assets
+          GOEXPERIMENT=jsonv2 go build -v -o build_assets/v2node -trimpath -ldflags "-X 'github.com/wyx2685/v2node/cmd.version=$version' -s -w -buildid="
+      - name: Package
+        run: |
+          cp README.md LICENSE build_assets/
+          for i in geoip geosite; do
+            curl -fsSL "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/${i}.dat" -o build_assets/${i}.dat
+          done
+          cd build_assets && zip -9r ../v2node-${{ matrix.asset }}.zip . && cd ..
+          sha256sum v2node-${{ matrix.asset }}.zip > v2node-${{ matrix.asset }}.zip.sha256
+      - uses: actions/upload-artifact@v6
+        with:
+          name: v2node-${{ matrix.asset }}
+          path: v2node-${{ matrix.asset }}.zip*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: v2node-*
+          merge-multiple: true
+          path: dist
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mieru-${{ github.run_number }}
+          name: v2node + mieru (build ${{ github.run_number }})
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          body: |
+            v2node with mieru inbound support. Built from ${{ github.sha }}.
+            Install / upgrade on a node server:
+            bash <(curl -Ls https://raw.githubusercontent.com/${{ github.repository }}/main/script/mieru_upgrade.sh)
+          files: dist/*

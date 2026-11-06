@@ -167,7 +167,7 @@ func (l *Limiter) CheckLimit(taguuid string, ip string, noUDPsource bool) (Dynam
 	} else {
 		return nil, true
 	}
-	if noUDPsource || l.Nodetype == "hysteria2" || l.Nodetype == "tuic" {
+	if noUDPsource || l.Nodetype == "hysteria2" || l.Nodetype == "tuic" || l.Nodetype == "mieru" {
 		// Store online user for device limit
 		newipMap := new(sync.Map)
 		newipMap.Store(ip, uid)

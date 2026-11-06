@@ -5,6 +5,7 @@ go 1.27.3
 godebug multipathtcp=0
 
 require (
+	github.com/enfein/mieru/v3 v3.39.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-acme/lego/v4 v4.35.2
 	github.com/go-resty/resty/v2 v2.17.2
