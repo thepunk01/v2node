@@ -17,7 +17,7 @@ esac
 
 if [[ ! -x /usr/local/v2node/v2node ]]; then
   echo -e "${yellow}没检测到已安装的 v2node。先用官方脚本装好 v2node 并填好面板对接信息，再运行本脚本：${plain}"
-  echo "wget -N https://raw.githubusercontent.com/wyx2685/v2node/master/script/install.sh && bash install.sh"
+  echo "wget -N https://raw.githubusercontent.com/thepunk01/v2node/main/script/install.sh && bash install.sh"
   exit 1
 fi
 
@@ -56,4 +56,4 @@ fi
 sleep 2
 /usr/local/v2node/v2node version 2>/dev/null || true
 echo -e "${green}完成。旧程序备份在 /usr/local/v2node/v2node.bak${plain}"
-echo -e "${yellow}注意：以后不要用 v2node 菜单里的「更新」，它会装回官方版（不带 mieru）。要更新请重新运行本脚本。${plain}"
+echo -e "${yellow}注意：v2node 菜单里的「更新」现在会从 thepunk01/v2node 更新（带 mieru）。${plain}"
